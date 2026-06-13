@@ -22,9 +22,9 @@ public class ChatOrchestrator
     public async Task<string> HandleIncomingAsync(string userId, string text, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return "Hello! 👋 How can I help you today?";
+            return "Hello! How can I help you today?";
 
-        var systemPrompt = BuildSystemPrompt(_bot.Industry, _bot.BusinessName);
+        var systemPrompt = BuildSystemPrompt(_bot.Industries, _bot.BusinessName);
         var history = _store.GetHistory(userId);
 
         var reply = await _ai.GetReplyAsync(systemPrompt, history, text, ct);
@@ -34,11 +34,8 @@ public class ChatOrchestrator
         return reply;
     }
 
-    /// <summary>
-    /// Per-industry persona. In production you would also inject RAG context here
-    /// (retrieved from Azure AI Search over the client's catalog / policies).
-    /// </summary>
-    private static string BuildSystemPrompt(string industry, string businessName)
+    // In production, also inject RAG context here (Azure AI Search over the client's catalog/policies).
+    private static string BuildSystemPrompt(List<string> industries, string businessName)
     {
         var baseRules =
             $"You are the AI assistant for \"{businessName}\", a business in Dubai, UAE. " +
@@ -49,20 +46,30 @@ public class ChatOrchestrator
             "If you cannot help, offer to connect a human agent. Never invent prices or availability you don't know — " +
             "ask a clarifying question instead.";
 
-        var persona = industry.ToLowerInvariant() switch
-        {
-            "healthcare" =>
-                " You represent a medical clinic. Help with appointment booking, clinic timings, services, and insurance " +
-                "eligibility (e.g. Daman, AXA, Sukoon, Thiqa). Do NOT give medical diagnoses — for symptoms, recommend booking " +
-                "a consultation. Be reassuring and respect patient privacy.",
-            "retail" =>
-                " You represent a retail/e-commerce store. Help with product questions, order tracking, offers, store " +
-                "locations, and returns. Encourage purchases and upsell relevant items politely.",
-            _ =>
-                " You represent a real estate agency. Help with property search (area, budget, bedrooms), prices, payment " +
-                "plans, and booking viewings. Qualify the buyer's budget and timeline."
-        };
+        var personas = industries
+            .Select(i => i.ToLowerInvariant() switch
+            {
+                "healthcare" =>
+                    "HEALTHCARE: Help with appointment booking, clinic timings, services offered, and insurance eligibility " +
+                    "(e.g. Daman, AXA, Sukoon, Thiqa). Do NOT give medical diagnoses — for symptoms, recommend booking a " +
+                    "consultation. Be reassuring and respect patient privacy.",
+                "retail" =>
+                    "RETAIL: Help with product questions, order tracking, offers, store locations, and returns. " +
+                    "Encourage purchases and upsell relevant items politely.",
+                _ =>
+                    "REAL ESTATE: Help with property search (area, budget, bedrooms), prices, payment plans, and booking " +
+                    "viewings. Qualify the buyer's budget and timeline. Mention off-plan and ready properties where relevant."
+            })
+            .ToList();
 
-        return baseRules + persona;
+        if (personas.Count == 1)
+            return baseRules + " " + personas[0];
+
+        var combined =
+            $" This business operates across {personas.Count} divisions. Identify which division the customer's query relates " +
+            "to from context, then respond using the relevant expertise below:\n" +
+            string.Join("\n", personas.Select((p, i) => $"{i + 1}. {p}"));
+
+        return baseRules + combined;
     }
 }

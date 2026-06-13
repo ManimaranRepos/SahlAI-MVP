@@ -28,8 +28,11 @@ public class WhatsAppOptions
 /// <summary>Bot behaviour settings (bind from "Bot" config section).</summary>
 public class BotOptions
 {
-    /// <summary>realestate | healthcare | retail — selects the system prompt persona.</summary>
-    public string Industry { get; set; } = "realestate";
+    /// <summary>
+    /// One or more industries this bot serves: realestate | healthcare | retail.
+    /// Use a JSON array in config to enable multiple: ["healthcare","realestate"]
+    /// </summary>
+    public List<string> Industries { get; set; } = ["realestate"];
     public string BusinessName { get; set; } = "Dubai Homes Realty";
     public int HistoryTurns { get; set; } = 10;
 }
