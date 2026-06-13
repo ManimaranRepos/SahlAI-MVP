@@ -12,9 +12,30 @@ public static class ChatPage
 {
     public static IEndpointRouteBuilder MapChatDemo(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/", (IOptions<BotOptions> bot) =>
-            Results.Content(Html.Replace("{{BUSINESS}}", bot.Value.BusinessName), "text/html; charset=utf-8"));
+        app.MapGet("/", (HttpContext ctx, IOptions<BotOptions> bot, ILeadStore leads) =>
+        {
+            var src = ctx.Request.Query["src"].ToString();
+            var referrer = ctx.Request.Headers.Referer.ToString();
+            var ua = ctx.Request.Headers.UserAgent.ToString();
+            leads.LogVisit(
+                Trim(src), ctx.Request.Path.ToString(), Trim(referrer), Trim(ua), ClientIp(ctx));
+            return Results.Content(Html.Replace("{{BUSINESS}}", bot.Value.BusinessName), "text/html; charset=utf-8");
+        });
         return app;
+    }
+
+    private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    /// <summary>Best-effort real client IP (Azure forwards it in X-Forwarded-For as ip:port, possibly comma-separated).</summary>
+    private static string? ClientIp(HttpContext ctx)
+    {
+        var xff = ctx.Request.Headers["X-Forwarded-For"].ToString();
+        var raw = !string.IsNullOrWhiteSpace(xff)
+            ? xff.Split(',')[0].Trim()
+            : ctx.Connection.RemoteIpAddress?.ToString();
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (raw.Count(ch => ch == ':') == 1) raw = raw.Split(':')[0]; // strip :port for IPv4
+        return raw;
     }
 
     private const string Html =

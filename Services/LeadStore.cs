@@ -5,6 +5,9 @@ namespace SahlAI.Api.Services;
 
 public record LeadSummary(string SessionId, string? Name, string? Phone, string FirstSeen, string LastSeen, int MessageCount);
 public record StoredMessage(string Role, string Text, string CreatedAt);
+public record VisitStats(int Total, int Today, int Week, int ChatSessions);
+public record SourceCount(string Source, int Count);
+public record VisitRow(string CreatedAt, string? Source, string? Ip, string? UserAgent, string? Referrer);
 
 /// <summary>
 /// Captures every chat visitor and their messages into a SQLite database.
@@ -16,6 +19,10 @@ public interface ILeadStore
     void LogTurn(string sessionId, string userText, string botReply);
     IReadOnlyList<LeadSummary> GetLeads();
     IReadOnlyList<StoredMessage> GetMessages(string sessionId);
+    void LogVisit(string? source, string? path, string? referrer, string? userAgent, string? ip);
+    VisitStats GetVisitStats();
+    IReadOnlyList<SourceCount> GetVisitsBySource();
+    IReadOnlyList<VisitRow> GetRecentVisits(int limit);
 }
 
 public class SqliteLeadStore : ILeadStore
@@ -83,6 +90,16 @@ public class SqliteLeadStore : ILeadStore
                     CreatedAt TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS IX_Messages_Session ON Messages(SessionId);
+                CREATE TABLE IF NOT EXISTS Visits (
+                    Id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Source    TEXT,
+                    Path      TEXT,
+                    Referrer  TEXT,
+                    UserAgent TEXT,
+                    Ip        TEXT,
+                    CreatedAt TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS IX_Visits_Created ON Visits(CreatedAt);
                 """;
             cmd.ExecuteNonQuery();
         }
@@ -161,6 +178,83 @@ public class SqliteLeadStore : ILeadStore
         var list = new List<StoredMessage>();
         while (r.Read())
             list.Add(new StoredMessage(r.GetString(0), r.GetString(1), r.GetString(2)));
+        return list;
+    }
+
+    public void LogVisit(string? source, string? path, string? referrer, string? userAgent, string? ip)
+    {
+        var now = DateTime.UtcNow.ToString("u");
+        lock (_writeLock)
+        {
+            using var c = Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "INSERT INTO Visits (Source, Path, Referrer, UserAgent, Ip, CreatedAt) VALUES ($src,$p,$r,$ua,$ip,$now);";
+            cmd.Parameters.AddWithValue("$src", (object?)source ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$p", (object?)path ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$r", (object?)referrer ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$ua", (object?)userAgent ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$ip", (object?)ip ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$now", now);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public VisitStats GetVisitStats()
+    {
+        var todayCut = DateTime.UtcNow.Date.ToString("u");
+        var weekCut = DateTime.UtcNow.AddDays(-7).ToString("u");
+        using var c = Open();
+        int total = CountSince(c, null);
+        int today = CountSince(c, todayCut);
+        int week = CountSince(c, weekCut);
+
+        using var lc = c.CreateCommand();
+        lc.CommandText = "SELECT COUNT(*) FROM Leads;";
+        int chats = Convert.ToInt32(lc.ExecuteScalar());
+
+        return new VisitStats(total, today, week, chats);
+    }
+
+    private static int CountSince(SqliteConnection c, string? cutoff)
+    {
+        using var cmd = c.CreateCommand();
+        if (cutoff is null)
+            cmd.CommandText = "SELECT COUNT(*) FROM Visits;";
+        else
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM Visits WHERE CreatedAt >= $cut;";
+            cmd.Parameters.AddWithValue("$cut", cutoff);
+        }
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public IReadOnlyList<SourceCount> GetVisitsBySource()
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(NULLIF(Source,''),'(direct)') AS s, COUNT(*) FROM Visits GROUP BY s ORDER BY COUNT(*) DESC;";
+        using var r = cmd.ExecuteReader();
+        var list = new List<SourceCount>();
+        while (r.Read())
+            list.Add(new SourceCount(r.GetString(0), r.GetInt32(1)));
+        return list;
+    }
+
+    public IReadOnlyList<VisitRow> GetRecentVisits(int limit)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT CreatedAt, Source, Ip, UserAgent, Referrer FROM Visits ORDER BY Id DESC LIMIT $lim;";
+        cmd.Parameters.AddWithValue("$lim", limit);
+        using var r = cmd.ExecuteReader();
+        var list = new List<VisitRow>();
+        while (r.Read())
+            list.Add(new VisitRow(
+                r.GetString(0),
+                r.IsDBNull(1) ? null : r.GetString(1),
+                r.IsDBNull(2) ? null : r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetString(3),
+                r.IsDBNull(4) ? null : r.GetString(4)));
         return list;
     }
 
