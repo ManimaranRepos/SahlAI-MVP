@@ -14,4 +14,16 @@
     (You can later swap in the Azure.AI.OpenAI SDK if you prefer.)
   -->
 
+  <ItemGroup>
+    <!-- Exclude nested repo clone from compilation -->
+    <Compile Remove="SahlAI-MVP\**" />
+    <Content Remove="SahlAI-MVP\**" />
+    <EmbeddedResource Remove="SahlAI-MVP\**" />
+    <None Remove="SahlAI-MVP\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+  </ItemGroup>
+
 </Project>
