@@ -23,8 +23,11 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Health check
-app.MapGet("/", () => Results.Ok(new { service = "Sahl AI", status = "running", time = DateTime.UtcNow }));
+// Browser chat demo at "/" — try the bot without WhatsApp configured.
+app.MapChatDemo();
+
+// Health check (JSON) for uptime monitoring.
+app.MapGet("/health", () => Results.Ok(new { service = "Sahl AI", status = "running", time = DateTime.UtcNow }));
 
 // Register the WhatsApp webhook endpoints (GET verify + POST receive)
 app.MapWhatsAppWebhook();
