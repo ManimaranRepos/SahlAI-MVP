@@ -27,8 +27,18 @@ public class SqliteLeadStore : ILeadStore
     private static readonly Regex PhoneRx =
         new(@"(\+?\d[\d\s\-\(\)]{6,16}\d)", RegexOptions.Compiled);
     private static readonly Regex NameRx =
-        new(@"(?:my name is|i am|i'm|this is|name\s*[:\-]?)\s+([A-Za-z][A-Za-z .'\-]{1,40})",
+        new(@"(?:my name is|my name'?s|i am|i'?m|this is|name is|name'?s|name\s*[:\-])\s+([A-Za-z][A-Za-z .'\-]{0,40})",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Words that signal the name has ended — they must never be captured as part of it.
+    private static readonly HashSet<string> NameStopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "my", "is", "the", "a", "an", "im", "i", "this", "that",
+        "phone", "number", "mobile", "cell", "contact", "whatsapp", "email", "mail",
+        "no", "num", "call", "reach", "here", "from", "at", "on", "in",
+        "looking", "interested", "searching", "trying", "planning", "keen", "want", "need",
+        "buy", "buying", "rent", "renting", "sell", "selling", "new", "just"
+    };
 
     public SqliteLeadStore()
     {
@@ -158,7 +168,18 @@ public class SqliteLeadStore : ILeadStore
     {
         var m = NameRx.Match(text);
         if (!m.Success) return null;
-        var name = m.Groups[1].Value.Trim().TrimEnd('.', ',', '!');
+
+        var words = new List<string>();
+        foreach (var raw in m.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var w = raw.Trim('.', ',', '!', '?', ':', ';');
+            if (w.Length == 0) continue;
+            if (NameStopWords.Contains(w)) break;          // stop at connective / contact words
+            words.Add(char.ToUpperInvariant(w[0]) + w[1..]); // normalise casing (kalaiyarasi -> Kalaiyarasi)
+            if (words.Count == 3) break;                    // names rarely exceed 3 tokens
+        }
+
+        var name = string.Join(' ', words);
         return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
