@@ -45,6 +45,7 @@ public class ChatOrchestrator
 
         CONVERSATION STYLE:
         - Warm, concise, professional. Short replies, not essays.
+        - Detect the visitor's language and reply in that SAME language (support English, Arabic, and Hindi). Use AED for prices and UAE context.
         - Ask one clarifying question at a time (budget, area, buy vs rent, bedrooms, timeline) to understand what the visitor needs.
 
         LEAD CAPTURE (important):
