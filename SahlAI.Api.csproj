@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SahlAI.Api</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    No third-party packages required — the scaffold talks to Azure OpenAI and the
+    WhatsApp Cloud API directly over HTTPS using the built-in HttpClient and
+    System.Text.Json. This keeps the MVP dependency-light and easy to audit.
+    (You can later swap in the Azure.AI.OpenAI SDK if you prefer.)
+  -->
+
+</Project>
