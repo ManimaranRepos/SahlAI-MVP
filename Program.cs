@@ -11,6 +11,7 @@ builder.Services.Configure<BotOptions>(builder.Configuration.GetSection("Bot"));
 // ----- Services -----
 builder.Services.AddHttpClient();                                  // IHttpClientFactory
 builder.Services.AddSingleton<IConversationStore, InMemoryConversationStore>();
+builder.Services.AddSingleton<ILeadStore, SqliteLeadStore>();
 builder.Services.AddSingleton<IAzureOpenAIService, AzureOpenAIService>();
 builder.Services.AddSingleton<IWhatsAppService, WhatsAppService>();
 builder.Services.AddSingleton<ChatOrchestrator>();
@@ -23,8 +24,12 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Browser chat demo at "/" — try the bot without WhatsApp configured.
+// Marketing website + popup chat widget at "/".
 app.MapChatDemo();
+
+// Website chat API (logs every turn to the lead store) + admin dashboard.
+app.MapChatApi();
+app.MapAdmin();
 
 // Health check (JSON) for uptime monitoring.
 app.MapGet("/health", () => Results.Ok(new { service = "Sahl AI", status = "running", time = DateTime.UtcNow }));
